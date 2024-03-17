@@ -1,10 +1,3 @@
-# selective_sensor_fusion
-Webpage for our CVPR19 paper
-Selective Sensor Fusion for Neural Visual Inertial Odometry
-Changhao Chen, Stefano Rosa, Yishu Miao, Chris Xiaoxuan Lu, Wei Wu, Andrew Markham, Niki Trigoni 
-
-The source code has been released!
-
-Here is our preprocessed dataset.
-
-Baidu Disk:  https://pan.baidu.com/s/1X2Lg86fLocvBImH4vlN15A?pwd=96yx Enter Code: 96yx
+运行以下命令来训练模型：
+python train.py --sequence-length 10 --rotation-mode euler -j 4 --epochs 50 --epoch-size 100 -b 32 --lr 0.001 --momentum 0.9 --weight-decay 0.0001 --print-freq 10 --seed 123 --log-summary logs/ data/
+DIR参数被设置为data/，表示数据的目录路径。你需要根据你的实际情况修改命令中的参数值和数据目录路径

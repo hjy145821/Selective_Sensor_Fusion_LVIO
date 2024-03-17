@@ -5,6 +5,17 @@ import torch.nn.functional as F
 
 
 def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1):
+    # 定义卷积层，包括卷积操作、批归一化和激活函数。
+
+    # 参数：
+    # - batchNorm: 是否使用批归一化（True/False）
+    # - in_planes: 输入通道数
+    # - out_planes: 输出通道数
+    # - kernel_size: 卷积核大小，默认为3
+    # - stride: 步长，默认为1
+
+    # 返回：
+    # - nn.Sequential对象，包含卷积层、批归一化和激活函数
     if batchNorm:
         return nn.Sequential(
             nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size-1)//2, bias=False),
@@ -17,24 +28,35 @@ def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1):
             nn.LeakyReLU(0.1,inplace=True)
         )
 
-
 def upconv(in_planes, out_planes):
+    # 定义上采样卷积层，包括转置卷积操作和ReLU激活函数。
+
+    # 参数：
+    # - in_planes: 输入通道数
+    # - out_planes: 输出通道数
+
+    # 返回：
+    # - nn.Sequential对象，包含转置卷积层和ReLU激活函数
     return nn.Sequential(
         nn.ConvTranspose2d(in_planes, out_planes, kernel_size=4, stride=2, padding=1),
         nn.ReLU(inplace=True)
     )
 
-
 def predict_flow(in_planes):
-    return nn.Conv2d(in_planes,2,kernel_size=3,stride=1,padding=1,bias=True)
+    # 定义预测光流的卷积层。
 
+    # 参数：
+    # - in_planes: 输入通道数
+
+    # 返回：
+    # - nn.Conv2d对象，用于预测光流
+    return nn.Conv2d(in_planes,2,kernel_size=3,stride=1,padding=1,bias=True)
 
 def deconv(in_planes, out_planes):
     return nn.Sequential(
         nn.ConvTranspose2d(in_planes, out_planes, kernel_size=4, stride=2, padding=1, bias=True),
         nn.LeakyReLU(0.1,inplace=True)
     )
-
 
 class FlowNet(nn.Module):
 
@@ -94,7 +116,6 @@ class FlowNet(nn.Module):
 
         return features
 
-
 class RecFeat(nn.Module):
 
     def __init__(self, x_dim, h_dim, batch_size, n_layers):
@@ -133,7 +154,6 @@ class RecFeat(nn.Module):
         lstm_out = lstm_out.view(-1, self.h_dim)
 
         return lstm_out
-
 
 class RecImu(nn.Module):
 
@@ -176,7 +196,6 @@ class RecImu(nn.Module):
 
         return result
 
-
 class Fc_Flownet(nn.Module):
 
     def __init__(self, input_dim, output_dim):
@@ -208,16 +227,13 @@ class Fc_Flownet(nn.Module):
 
         return feat_new
 
-
 def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape).cuda()
     return -Variable(torch.log(-torch.log(U + eps) + eps))
 
-
 def gumbel_softmax_sample(logits, temperature):
     y = logits + sample_gumbel(logits.size())
     return F.softmax(y / temperature, dim=-1)
-
 
 def gumbel_softmax(logits, temperature, latent_dim):
     """
@@ -233,7 +249,6 @@ def gumbel_softmax(logits, temperature, latent_dim):
     y_hard = y_hard.view(*shape)
     y_hard = (y_hard - y).detach() + y
     return y_hard.view(-1, latent_dim, 2)
-
 
 class Hard_Mask(nn.Module):
 
@@ -271,7 +286,6 @@ class Hard_Mask(nn.Module):
 
         return z1
 
-
 class Soft_Mask(nn.Module):
 
     def __init__(self, input_dim, output_dim):
@@ -304,9 +318,21 @@ class Soft_Mask(nn.Module):
 
         return feat_new
 
-
 class PoseRegressor(nn.Module):
+    # 姿态回归器模型，用于预测姿态（位移和旋转）
 
+    # 参数：
+    # - feature_dim: 输入特征的维度
+
+    # 成员变量：
+    # - feature_dim: 输入特征的维度
+    # - tr_pred: 位移预测网络
+    # - ro_pred: 旋转预测网络
+    # - dropout: Dropout层
+
+    # 方法：
+    # - init_weights: 初始化模型权重
+    # - forward: 前向传播计算姿态预测结果
     def __init__(self, feature_dim):
         super(PoseRegressor, self).__init__()
 
@@ -321,6 +347,7 @@ class PoseRegressor(nn.Module):
         self.dropout = nn.Dropout(0.2)
 
     def init_weights(self):
+        # 初始化模型权重，使用Xavier初始化方法
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight.data)
@@ -328,7 +355,13 @@ class PoseRegressor(nn.Module):
                     m.bias.data.zero_()
 
     def forward(self, feat):
+        # 前向传播计算姿态预测结果
 
+        # 参数：
+        # - feat: 输入特征
+
+        # 返回：
+        # - pose: 姿态预测结果
         feat = feat.view(-1, self.feature_dim)
 
         tr = self.tr_pred(feat)

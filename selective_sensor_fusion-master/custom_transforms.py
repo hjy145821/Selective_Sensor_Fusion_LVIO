@@ -6,18 +6,20 @@ import numpy as np
 # 在调用时，它会依次对输入的图像进行这些转换操作，并返回转换后的图像。
 class Compose(object):
     def __init__(self, transforms):
-        self.transforms = transforms + [PointCloudToTensor()]
+        self.transforms = transforms
     def __call__(self, images):
         for t in self.transforms:
             images = t(images)
         return images
     
-# PointCloudToTensorl类，用于将点云数据转换为PyTorch张量的格式。
+# # PointCloudToTensor类，用于将点云数据转换为PyTorch张量的格式。
 class PointCloudToTensor(object):
-    def __call__(self, point_cloud):
-        # 将点云数据转换为PyTorch张量的格式
-        tensor = torch.from_numpy(point_cloud).float()
-        return tensor
+    def __call__(self, pointclouds):
+        tensors = []
+        for pc in pointclouds:
+            # handle numpy array
+            tensors.append(torch.from_numpy(pc.T).float())
+        return tensors
 
 # Normalize类：这个类用于对图像进行标准化处理。在初始化时，它接受均值（mean）和标准差（std）作为参数。
 # 在调用时，它会对输入的图像进行标准化处理，即将每个像素值减去均值并除以标准差。

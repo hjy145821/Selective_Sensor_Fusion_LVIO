@@ -31,11 +31,11 @@ parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], defa
                     help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers')
-parser.add_argument('--epochs', default=100, type=int, metavar='N',
+parser.add_argument('--epochs', default=1, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--epoch-size', default=0, type=int, metavar='N',
                     help='manual epoch size (will match dataset size if not set)')
-parser.add_argument('-b', '--batch-size', default=4, type=int,
+parser.add_argument('-b', '--batch-size', default=8, type=int,
                     metavar='N', help='mini-batch size')
 parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float,
                     metavar='LR', help='initial learning rate')
@@ -45,7 +45,7 @@ parser.add_argument('--beta', default=0.999, type=float, metavar='M',
                     help='beta parameters for adam')
 parser.add_argument('--weight-decay', '--wd', default=0, type=float,
                     metavar='W', help='weight decay')
-parser.add_argument('--print-freq', default=10, type=int,
+parser.add_argument('--print-freq', default=20, type=int,
                     metavar='N', help='print frequency')
 parser.add_argument('--seed', default=0, type=int, help='seed for random functions, and network initialization')
 parser.add_argument('--log-summary', default='progress_log_summary.csv', metavar='PATH',
@@ -53,7 +53,6 @@ parser.add_argument('--log-summary', default='progress_log_summary.csv', metavar
 
 best_error = -1
 n_iter = 0
-
 
 def main():
 
@@ -78,7 +77,7 @@ def main():
     #     os.makedirs(args.save_path+'/models/')
     # torch.manual_seed(args.seed)
 
-    abs_path = Path('D:\深大\Slam\path')
+    abs_path = Path('D:\\深大\\Slam\\path')
     save_path = save_path_formatter(args, parser)
     save_path = str(save_path)  # 将save_path转换为字符串类型
     save_path = re.sub(r'[,:]', '_', save_path)  # 使用正则表达式替换逗号和冒号
@@ -186,7 +185,7 @@ def main():
 
     pose_net.init_weights()
 
-    flownet_model_path = str(abs_path) + '../../../pretrain/flownets_EPE1.951.pth'
+    flownet_model_path = str(abs_path) + '\\FlowNetPytorch\\pretrain\\Flownets_EPE1.951.pth.tar'
     pretrained_flownet = True
     if pretrained_flownet:
         weights = torch.load(flownet_model_path)
@@ -255,26 +254,25 @@ def main():
 
             best_val = val_loss
 
-            fn = args.save_path + '/models/rec_' + str(epoch) + '.pth'
+            fn = str(args.save_path) + '\\models\\rec_' + str(epoch) + '.pth'
             torch.save(rec_feat.module.state_dict(), fn)
 
-            fn = args.save_path + '/models/pose_' + str(epoch) + '.pth'
+            fn = str(args.save_path) + '\\models\\pose_' + str(epoch) + '.pth'
             torch.save(pose_net.module.state_dict(), fn)
 
-            fn = args.save_path + '/models/fc_flownet_' + str(epoch) + '.pth'
+            fn = str(args.save_path) + '\\models\\fc_flownet_' + str(epoch) + '.pth'
             torch.save(fc_flownet.module.state_dict(), fn)
 
-            fn = args.save_path + '/models/rec_imu_' + str(epoch) + '.pth'
+            fn = str(args.save_path) + '\\models\\rec_imu_' + str(epoch) + '.pth'
             torch.save(rec_imu.module.state_dict(), fn)
 
-            fn = args.save_path + '/models/selectfusion_' + str(epoch) + '.pth'
+            fn = str(args.save_path) + '\\models\\selectfusion_' + str(epoch) + '.pth'
             torch.save(selectfusion.module.state_dict(), fn)
             print('Model has been saved')
 
-        with open(args.save_path / args.log_summary, 'a') as csvfile:
+        with open(str(args.save_path) + '\\' + args.log_summary, 'a') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
             writer.writerow([train_loss, pose_loss, euler_loss, val_loss, val_pose_loss, val_euler_loss])
-
 
 def train(args, train_loader, feature_ext, rec_feat, rec_imu, pose_net, fc_flownet, selectfusion, optimizer, epoch,
           fusion_mode):
@@ -439,7 +437,6 @@ def train(args, train_loader, feature_ext, rec_feat, rec_imu, pose_net, fc_flown
 
     return aver_loss, aver_pose_loss, aver_euler_loss, temp
 
-
 def validate(args, val_loader, feature_ext, rec_feat, rec_imu, pose_net, fc_flownet, selectfusion, temp, epoch,
              fusion_mode):
 
@@ -458,7 +455,7 @@ def validate(args, val_loader, feature_ext, rec_feat, rec_imu, pose_net, fc_flow
     aver_loss = 0
     aver_pose_loss = 0
     aver_euler_loss = 0
-    aver_n = 0
+    aver_n = 1
 
     for i, (imgs, imus, poses) in enumerate(val_loader):
 
@@ -573,7 +570,6 @@ def validate(args, val_loader, feature_ext, rec_feat, rec_imu, pose_net, fc_flow
           .format(epoch + 1, aver_loss, aver_pose_loss, aver_euler_loss))
 
     return aver_loss, aver_pose_loss, aver_euler_loss
-
 
 def test(args, test_loader, feature_ext, rec_feat, rec_imu, pose_net,
          fc_flownet, selectfusion, temp, epoch, fusion_mode):
@@ -723,13 +719,13 @@ def test(args, test_loader, feature_ext, rec_feat, rec_imu, pose_net,
               format(k, epoch + 1, args.epochs, i + 1, len(test_loader), loss.item(), pose_loss.item(),
                      euler_loss.item()))
 
-        file_name = 'results/result_seq' + str(k) + '_' + str(epoch) + '.csv'
+        file_name = 'D:\\深大\\Slam\\path\\checkpoints\\dataset_test\\results\\result_seq' + str(k) + '_' + str(epoch) + '.csv'
         np.savetxt(file_name, result, delimiter=',')
 
-        file_name = 'results/truth_pose_seq' + str(k) + '_' + str(epoch) + '.csv'
+        file_name = 'D:\\深大\\Slam\\path\\checkpoints\\dataset_test\\results\\truth_pose_seq' + str(k) + '_' + str(epoch) + '.csv'
         np.savetxt(file_name, truth_pose, delimiter=',')
 
-        file_name = 'results/truth_euler_seq' + str(k) + '_' + str(epoch) + '.csv'
+        file_name = 'D:\\深大\\Slam\\path\\checkpoints\\dataset_test\\results\\truth_euler_seq' + str(k) + '_' + str(epoch) + '.csv'
         np.savetxt(file_name, truth_euler, delimiter=',')
 
     aver_loss /= aver_n
@@ -740,7 +736,6 @@ def test(args, test_loader, feature_ext, rec_feat, rec_imu, pose_net,
 
     return
 
-
 def compute_trans_pose(ref_pose, tgt_pose):
 
     tmp_pose = np.copy(tgt_pose)
@@ -749,7 +744,6 @@ def compute_trans_pose(ref_pose, tgt_pose):
     trans_pose = np.linalg.inv(ref_pose[:, :, :3]) @ tmp_pose
 
     return trans_pose
-
 
 if __name__ == '__main__':
     main()

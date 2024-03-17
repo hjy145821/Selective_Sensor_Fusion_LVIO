@@ -7,7 +7,6 @@ from PIL import Image
 import datetime
 from collections import OrderedDict
 
-
 def save_path_formatter(args, parser):
     def is_default(key, value):
         return value == parser.get_default(key)
@@ -32,11 +31,9 @@ def save_path_formatter(args, parser):
     timestamp = datetime.datetime.now().strftime("%m-%d-%H:%M")
     return save_path/timestamp
 
-
 def save_image(image_numpy, image_path):
     image_pil = Image.fromarray(image_numpy)
     image_pil.save(image_path)
-
 
 def tensor2array(tensor, max_value=255, colormap='rainbow'):
     if max_value is None:
@@ -64,7 +61,6 @@ def tensor2array(tensor, max_value=255, colormap='rainbow'):
         #assert(tensor.size(0) == 3)
         array = (0.5 + tensor.numpy().transpose(1, 2, 0)*0.5)*255
     return array.astype(np.uint8)
-
 
 def save_checkpoint(save_path, dispnet_state, feat_state, rec_state, exp_pose_state, is_best,
                     filename='checkpoint.pth.tar'):
@@ -116,7 +112,6 @@ def euler2mat(angle):
     rotMat = xmat.bmm(ymat).bmm(zmat)
     return rotMat
 
-
 def mat2euler(mat):
 
     r11, r12, r13 = mat[:, 0, 0], mat[:, 0, 1], mat[:, 0, 2]
@@ -132,7 +127,6 @@ def mat2euler(mat):
     euler = torch.cat([x, y, z], dim=1)
 
     return euler
-
 
 def quat2mat(quat):
     """Convert quaternion coefficients to rotation matrix.
@@ -157,7 +151,6 @@ def quat2mat(quat):
                           2*xz - 2*wy, 2*wx + 2*yz, w2 - x2 - y2 + z2], dim=1).view(B, 3, 3)
     return rotMat
 
-
 def pose_vec2mat(vec, rotation_mode='euler'):
     """
     Convert 6DoF parameters to transformation matrix.
@@ -175,4 +168,3 @@ def pose_vec2mat(vec, rotation_mode='euler'):
         rot_mat = quat2mat(rot)  # [B, 3, 3]
     transform_mat = torch.cat([rot_mat, translation], dim=2)  # [B, 3, 4]
     return transform_mat
-

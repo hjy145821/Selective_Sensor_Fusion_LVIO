@@ -259,7 +259,8 @@ def degrade_imu_data(sample, sequence_length):
 
 
 def load_as_float(path, label):
-    img = Image.open(path).convert('RGB').astype(np.float32)
+    img = np.array(Image.open(path).convert('RGB'), dtype=np.float32)
+    # img = Image.open(path).convert('RGB').astype(np.float32)
     # img = imread(path).astype(np.float32)
 
     if label == 1:
