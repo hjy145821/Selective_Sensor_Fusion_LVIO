@@ -91,6 +91,36 @@ class FlowNet(nn.Module):
         self.upsampled_flow4_to_3 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
         self.upsampled_flow3_to_2 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
 
+    def project_to_cylindrical(self, point_cloud, height, width):
+        # 将点云投影到柱面坐标的逻辑
+        # point_cloud: 输入的点云数据，形状为 (batch_size, num_points, 3)
+        # height: 柱面图像的高度
+        # width: 柱面图像的宽度
+
+        # 假设你的投影逻辑是简单地将点云的 x 和 y 坐标映射到柱面图像的 x 和 y 坐标
+        x = point_cloud[:, :, 0]  # 提取点云的 x 坐标
+        y = point_cloud[:, :, 1]  # 提取点云的 y 坐标
+
+        # 将 x 和 y 坐标映射到柱面图像的 x 和 y 坐标范围内
+        x_mapped = (x + 1) * (width - 1) / 2  # 映射到 [0, width-1] 范围内
+        y_mapped = (y + 1) * (height - 1) / 2  # 映射到 [0, height-1] 范围内
+
+        # 创建一个空的柱面图像张量
+        cylindrical_image = torch.zeros((point_cloud.shape[0], height, width))
+
+        # 将点云投影到柱面图像中
+        cylindrical_image.scatter_(2, x_mapped.unsqueeze(2).long(), y_mapped.unsqueeze(2).long(), 1)
+
+        return cylindrical_image
+    def extract_point_cloud_features(self, cylindrical_image):
+        # 使用FlowNet提取点云特征的逻辑
+        # cylindrical_image: 柱面图像，形状为 (batch_size, height, width)
+
+        # 假设你的特征提取逻辑是简单地将柱面图像展平为一维向量
+        features = cylindrical_image.view(cylindrical_image.shape[0], -1)
+
+        return features
+
     def init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
@@ -113,11 +143,17 @@ class FlowNet(nn.Module):
         out_conv6 = self.conv6_1(self.conv6(out_conv5))
 
         features = out_conv6.view(1, s[0], -1)
+        
+        # 将点云数据投影到柱面坐标中
+        cylindrical_image = self.project_to_cylindrical(point_cloud, height, width)
 
-        return features
+        # 使用FlowNet提取点云特征
+        point_cloud_features = self.extract_point_cloud_features(cylindrical_image)
+
+        return features, point_cloud_features
 
 class RecFeat(nn.Module):
-
+    # LSTM
     def __init__(self, x_dim, h_dim, batch_size, n_layers):
 
         super(RecFeat, self).__init__()

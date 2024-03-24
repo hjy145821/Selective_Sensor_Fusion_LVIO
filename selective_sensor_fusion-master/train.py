@@ -77,7 +77,7 @@ def main():
     #     os.makedirs(args.save_path+'/models/')
     # torch.manual_seed(args.seed)
 
-    abs_path = Path('D:\\深大\\Slam\\path')
+    abs_path = Path('D:\\SZU\\Slam\\path')
     save_path = save_path_formatter(args, parser)
     save_path = str(save_path)  # 将save_path转换为字符串类型
     save_path = re.sub(r'[,:]', '_', save_path)  # 使用正则表达式替换逗号和冒号
@@ -719,13 +719,13 @@ def test(args, test_loader, feature_ext, rec_feat, rec_imu, pose_net,
               format(k, epoch + 1, args.epochs, i + 1, len(test_loader), loss.item(), pose_loss.item(),
                      euler_loss.item()))
 
-        file_name = 'D:\\深大\\Slam\\path\\checkpoints\\dataset_test\\results\\result_seq' + str(k) + '_' + str(epoch) + '.csv'
+        file_name = 'D:\\SZU\\Slam\\path\\checkpoints\\dataset_test\\results\\result_seq' + str(k) + '_' + str(epoch) + '.csv'
         np.savetxt(file_name, result, delimiter=',')
 
-        file_name = 'D:\\深大\\Slam\\path\\checkpoints\\dataset_test\\results\\truth_pose_seq' + str(k) + '_' + str(epoch) + '.csv'
+        file_name = 'D:\\SZU\\Slam\\path\\checkpoints\\dataset_test\\results\\truth_pose_seq' + str(k) + '_' + str(epoch) + '.csv'
         np.savetxt(file_name, truth_pose, delimiter=',')
 
-        file_name = 'D:\\深大\\Slam\\path\\checkpoints\\dataset_test\\results\\truth_euler_seq' + str(k) + '_' + str(epoch) + '.csv'
+        file_name = 'D:\\SZU\\Slam\\path\\checkpoints\\dataset_test\\results\\truth_euler_seq' + str(k) + '_' + str(epoch) + '.csv'
         np.savetxt(file_name, truth_euler, delimiter=',')
 
     aver_loss /= aver_n

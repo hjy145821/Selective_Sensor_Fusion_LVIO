@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 import cv2
 import numpy as np
+import open3d as o3d
 
 class KITTI_Loader(data.Dataset):
     """A sequence data loader where the files are arranged in this way:
@@ -15,10 +16,8 @@ class KITTI_Loader(data.Dataset):
         root/scene_1/cam.txt
         root/scene_2/0000000.jpg
         .
-
         transform functions must take in a list a images and a numpy array (usually intrinsics matrix)
     """
-
     def __init__(self, root, seed=None, train=0, sequence_length=3, transform=None, data_degradation=0, data_random=True):
         np.random.seed(seed)
         random.seed(seed)
@@ -59,18 +58,26 @@ class KITTI_Loader(data.Dataset):
             imus_l = sorted(scene.glob('*.txt'))
             # imus_l = sorted(scene.files('*.txt'))
             poses_l = np.genfromtxt(scene / 'poses.txt').astype(np.float64).reshape(-1, 3, 4)
-
-            if len(imgs_l) < sequence_length:
-                continue
+            
+            # Load point cloud data
+            point_clouds = sorted(scene.glob('*.txt'))
+            point_cloud_data = []
+            for pc_file in point_clouds:
+                with open(pc_file, 'r') as file:
+                    for line in file:
+                        values = line.strip().split(' ')
+                        point_cloud = [float(values[0]), float(values[1]), float(values[2]), float(values[3])]
+                        point_cloud_data.append(point_cloud)
 
             for i in range(demi_length, len(imgs_l) - demi_length):
 
-                sample = {'imgs': [], 'poses': [], 'imus': [], 'data_degradation': []}
+                sample = {'imgs': [], 'poses': [], 'imus': [], 'point_clouds': [], 'data_degradation': []}
 
                 for j in shifts:
                     sample['imgs'].append(imgs_l[i + j])
                     sample['poses'].append(poses_l[i + j, :, :])
                     sample['imus'].append(np.genfromtxt(imus_l[i + j]).astype(np.float32).reshape(-1, 6))
+                    sample['point_clouds'].append(point_cloud_data[i])
 
                 sample['data_degradation'] = np.zeros(sequence_length).tolist()
 
@@ -115,12 +122,23 @@ class KITTI_Loader(data.Dataset):
             print(scene)
             poses_l = np.genfromtxt(scene / 'poses.txt').astype(np.float64).reshape(-1, 3, 4)
 
-            sample = {'imgs': [], 'poses': [], 'imus': [], 'data_degradation': []}
+            # Load point cloud data
+            point_clouds = sorted(scene.glob('*.txt'))
+            point_cloud_data = []
+            for pc_file in point_clouds:
+                with open(pc_file, 'r') as file:
+                    for line in file:
+                        values = line.strip().split(' ')
+                        point_cloud = [float(values[0]), float(values[1]), float(values[2]), float(values[3])]
+                        point_cloud_data.append(point_cloud)
+
+            sample = {'imgs': [], 'poses': [], 'imus': [], 'point_clouds': [], 'data_degradation': []}
 
             for i in range(len(imgs_l)):
                 sample['imgs'].append(imgs_l[i])
                 sample['poses'].append(poses_l[i, :, :])
                 sample['imus'].append(np.genfromtxt(imus_l[i]).astype(np.float32).reshape(-1, 6))
+                sample['point_clouds'].append(point_cloud_data[i])
 
             sample['data_degradation'] = np.zeros(len(imgs_l)).tolist()
 
@@ -146,7 +164,6 @@ class KITTI_Loader(data.Dataset):
 
     def __len__(self):
         return len(self.samples)
-
 
 def generate_degrade(sample, sequence_length, mode):
 
@@ -202,7 +219,6 @@ def generate_degrade(sample, sequence_length, mode):
 
     return
 
-
 def degrade_imu_data(sample, sequence_length):
 
     for i in range(sequence_length):
@@ -256,7 +272,6 @@ def degrade_imu_data(sample, sequence_length):
             sample['imus'][i] = imu_seq
 
     return
-
 
 def load_as_float(path, label):
     img = np.array(Image.open(path).convert('RGB'), dtype=np.float32)
