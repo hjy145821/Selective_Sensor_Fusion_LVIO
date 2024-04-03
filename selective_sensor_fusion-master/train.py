@@ -20,11 +20,12 @@ from itertools import chain
 from pathlib import Path
 import torch.nn.functional as F
 from data_loader import KITTI_Loader
-
+from data_loader import Args
+from custom_transforms import project_to_cylindrical
 parser = argparse.ArgumentParser(description='Selective Sensor Fusion on KITTI',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('data', metavar='E:\SLAM\Dataset\KITTI_RAW_Synced',
                     help='path to dataset')
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
 parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
@@ -57,31 +58,19 @@ n_iter = 0
 def main():
 
     global best_error, n_iter
-
-    args = parser.parse_args()
+    args = Args()
+    # args = parser.parse_args()
 
     n_save_model = 1
     degradation_mode = 0
     fusion_mode = 3
     # 0: vision only 1: direct 2: soft 3: hard
-
     # # set saving path
-    # abs_path = 'D:/path/'
-    # save_path = save_path_formatter(args, parser)
-    # args.save_path = str(abs_path) + 'checkpoints/' + str(save_path)
-    # # args.save_path = abs_path + 'checkpoints'/save_path
-    # print('=> will save everything to {}'.format(args.save_path))
-    # if not os.path.exists(args.save_path+'/imgs/'):
-    #     os.makedirs(args.save_path+'/imgs/')
-    # if not os.path.exists(args.save_path+'/models/'):
-    #     os.makedirs(args.save_path+'/models/')
-    # torch.manual_seed(args.seed)
-
-    abs_path = Path('D:\\SZU\\Slam\\path')
-    save_path = save_path_formatter(args, parser)
+    abs_path = Path('E:\\SLAM')
+    save_path = save_path_formatter(args)
     save_path = str(save_path)  # 将save_path转换为字符串类型
     save_path = re.sub(r'[,:]', '_', save_path)  # 使用正则表达式替换逗号和冒号
-    args.save_path = abs_path / 'checkpoints' / save_path
+    args.save_path = abs_path / 'path' / 'checkpoints' / save_path
     print('=> will save everything to {}'.format(args.save_path))
     if not (args.save_path / 'imgs').exists():
         (args.save_path / 'imgs').mkdir(parents=True)
@@ -90,52 +79,58 @@ def main():
     torch.manual_seed(args.seed)
 
     # image transform
+    # ArrayToTensor：将输入的图像从 HWC（高度、宽度、通道）格式转换为 CHW（通道、高度、宽度）格式，并将其转换为 PyTorch 的 FloatTensor 类型。
+    # normalize：对图像进行标准化处理。它将每个像素值减去均值（mean）并除以标准差（std）。在这个例子中，均值为 [0, 0, 0]，标准差为 [255, 255, 255]。这个操作将图像的像素值缩放到 -1 到 1 之间的范围。
+    # normalize2：对图像进行进一步的标准化处理。它将每个像素值减去均值（mean）并除以标准差（std）。在这个例子中，均值为 [0.411, 0.432, 0.45]，标准差为 [1, 1, 1]。这个操作将图像的像素值缩放到接近于 0 的范围。
     normalize = custom_transforms.Normalize(mean=[0, 0, 0],
                                             std=[255, 255, 255])
     normalize2 = custom_transforms.Normalize(mean=[0.411, 0.432, 0.45], std=[1, 1, 1])
-    input_transform = custom_transforms.Compose([
+    input_imgs_transform = custom_transforms.Compose_imgs([
         custom_transforms.ArrayToTensor(),
         normalize,
         normalize2
     ])
-
-    # PointCloud transform
-
+    input_points_transform = custom_transforms.Compose_points([
+        custom_transforms.ArrayToTensor(),
+        project_to_cylindrical
+    ])
     # Data loading code
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = KITTI_Loader(
-        args.data,
-        transform=input_transform,
-        seed=args.seed,
-        train=0,
-        sequence_length=args.sequence_length,
-        data_degradation=degradation_mode, data_random=True
-    )
 
+    # train_set = KITTI_Loader(
+    #     args.data,
+    #     transform_imgs=input_imgs_transform,
+    #     transform_points=input_points_transform,
+    #     seed=args.seed,
+    #     train=0,
+    #     sequence_length=args.sequence_length,
+    #     data_degradation=degradation_mode, data_random=True
+    # )
     val_set = KITTI_Loader(
         args.data,
-        transform=input_transform,
+        transform_imgs=input_imgs_transform,
+        transform_points=input_points_transform,
         seed=args.seed,
         train=1,
         sequence_length=args.sequence_length,
         data_degradation=degradation_mode, data_random=True
     )
-
     test_set = KITTI_Loader(
         args.data,
-        transform=input_transform,
+        transform_imgs=input_imgs_transform,
+        transform_points=input_points_transform,
         seed=args.seed,
         train=2,
         sequence_length=args.sequence_length,
         data_degradation=degradation_mode, data_random=False
     )
+    # print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
+    # print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
+    print('{} samples found in {} test scenes'.format(len(test_set), len(test_set.scenes)))
 
-    print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
-    print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
-
-    train_loader = torch.utils.data.DataLoader(
-        train_set, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
+    # train_loader = torch.utils.data.DataLoader(
+    #     train_set, batch_size=args.batch_size, shuffle=True,
+    #     num_workers=args.workers, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(
         val_set, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
@@ -144,20 +139,20 @@ def main():
         num_workers=args.workers, pin_memory=True)
 
     if args.epoch_size == 0:
-        args.epoch_size = len(train_loader)
+        args.epoch_size = len(test_loader)
 
     # create pose model
     print("=> creating pose model")
 
     feature_dim = 256
-
+    point_cloud_dim = 256
     if fusion_mode == 0:
         feature_ext = FlowNet(args.batch_size).cuda()
         fc_flownet = Fc_Flownet(32 * 1024, feature_dim*2).cuda()
         rec_feat = RecFeat(feature_dim * 2, feature_dim * 2, args.batch_size, 2).cuda()
         rec_imu = RecImu(6, int(feature_dim / 2), args.batch_size, 2, feature_dim).cuda()
         selectfusion = Hard_Mask(feature_dim * 2, feature_dim * 2).cuda()
-        pose_net = PoseRegressor(feature_dim * 2).cuda()
+        pose_net = PoseRegressor(feature_dim * 2, point_cloud_dim * 2).cuda()
 
     if fusion_mode == 1:
         feature_ext = FlowNet(args.batch_size).cuda()
@@ -165,7 +160,7 @@ def main():
         rec_feat = RecFeat(feature_dim * 2, feature_dim * 2, args.batch_size, 2).cuda()
         rec_imu = RecImu(6, int(feature_dim / 2), args.batch_size, 2, feature_dim).cuda()
         selectfusion = Hard_Mask(feature_dim * 2, feature_dim * 2).cuda()
-        pose_net = PoseRegressor(feature_dim * 2).cuda()
+        pose_net = PoseRegressor(feature_dim * 2, point_cloud_dim * 2).cuda()
 
     if fusion_mode == 2:
         feature_ext = FlowNet(args.batch_size).cuda()
@@ -173,7 +168,7 @@ def main():
         rec_feat = RecFeat(feature_dim * 2, feature_dim * 2, args.batch_size, 2).cuda()
         rec_imu = RecImu(6, int(feature_dim / 2), args.batch_size, 2, feature_dim).cuda()
         selectfusion = Soft_Mask(feature_dim * 2, feature_dim * 2).cuda()
-        pose_net = PoseRegressor(feature_dim * 2).cuda()
+        pose_net = PoseRegressor(feature_dim * 2, point_cloud_dim * 2).cuda()
 
     if fusion_mode == 3:
         feature_ext = FlowNet(args.batch_size).cuda()
@@ -181,11 +176,11 @@ def main():
         rec_feat = RecFeat(feature_dim * 2, feature_dim * 2, args.batch_size, 2).cuda()
         rec_imu = RecImu(6, int(feature_dim / 2), args.batch_size, 2, feature_dim).cuda()
         selectfusion = Hard_Mask(feature_dim * 2, feature_dim * 2).cuda()
-        pose_net = PoseRegressor(feature_dim * 2).cuda()
+        pose_net = PoseRegressor(feature_dim * 2, point_cloud_dim * 2).cuda()
 
     pose_net.init_weights()
 
-    flownet_model_path = str(abs_path) + '\\FlowNetPytorch\\pretrain\\Flownets_EPE1.951.pth.tar'
+    flownet_model_path = str(abs_path) + '\\path\\FlowNetPytorch\\pretrain\\Flownets_EPE1.951.pth.tar'
     pretrained_flownet = True
     if pretrained_flownet:
         weights = torch.load(flownet_model_path)
@@ -219,15 +214,14 @@ def main():
     print('=> training pose model')
 
     best_val = 100
-
     best_tra = 10000.0
     best_ori = 10000.0
 
     for epoch in range(args.epochs):
 
-        # train for one epoch
-        train_loss, pose_loss, euler_loss, temp = train(args, train_loader, feature_ext, rec_feat, rec_imu, pose_net,
-                                                        fc_flownet, selectfusion, optimizer, epoch, fusion_mode)
+        # # train for one epoch
+        # train_loss, pose_loss, euler_loss, temp = train(args, train_loader, feature_ext, rec_feat, rec_imu, pose_net,
+        #                                                 fc_flownet, selectfusion, optimizer, epoch, fusion_mode)
 
         temp = 0.5
 
@@ -272,7 +266,7 @@ def main():
 
         with open(str(args.save_path) + '\\' + args.log_summary, 'a') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
-            writer.writerow([train_loss, pose_loss, euler_loss, val_loss, val_pose_loss, val_euler_loss])
+            # writer.writerow([train_loss, pose_loss, euler_loss, val_loss, val_pose_loss, val_euler_loss])
 
 def train(args, train_loader, feature_ext, rec_feat, rec_imu, pose_net, fc_flownet, selectfusion, optimizer, epoch,
           fusion_mode):

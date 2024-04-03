@@ -1,4 +1,5 @@
 import torch
+import math
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -60,7 +61,7 @@ def deconv(in_planes, out_planes):
 
 class FlowNet(nn.Module):
 
-    def __init__(self, batchNorm=False):
+    def __init__(self, batchNorm=False,num_point_features=3):
         super(FlowNet, self).__init__()
 
         self.batchNorm = batchNorm
@@ -74,6 +75,9 @@ class FlowNet(nn.Module):
         self.conv5_1 = conv(self.batchNorm, 512, 512)
         self.conv6 = conv(self.batchNorm, 512, 1024, stride=2)
         self.conv6_1 = conv(self.batchNorm, 1024, 1024)
+
+        # 添加新的卷积层或全连接层来处理点云特征
+        self.conv_point_cloud = conv(self.batchNorm, num_point_features, num_point_features, kernel_size=3, stride=1)
 
         self.deconv5 = deconv(1024, 512)
         self.deconv4 = deconv(1026, 256)
@@ -91,36 +95,6 @@ class FlowNet(nn.Module):
         self.upsampled_flow4_to_3 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
         self.upsampled_flow3_to_2 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
 
-    def project_to_cylindrical(self, point_cloud, height, width):
-        # 将点云投影到柱面坐标的逻辑
-        # point_cloud: 输入的点云数据，形状为 (batch_size, num_points, 3)
-        # height: 柱面图像的高度
-        # width: 柱面图像的宽度
-
-        # 假设你的投影逻辑是简单地将点云的 x 和 y 坐标映射到柱面图像的 x 和 y 坐标
-        x = point_cloud[:, :, 0]  # 提取点云的 x 坐标
-        y = point_cloud[:, :, 1]  # 提取点云的 y 坐标
-
-        # 将 x 和 y 坐标映射到柱面图像的 x 和 y 坐标范围内
-        x_mapped = (x + 1) * (width - 1) / 2  # 映射到 [0, width-1] 范围内
-        y_mapped = (y + 1) * (height - 1) / 2  # 映射到 [0, height-1] 范围内
-
-        # 创建一个空的柱面图像张量
-        cylindrical_image = torch.zeros((point_cloud.shape[0], height, width))
-
-        # 将点云投影到柱面图像中
-        cylindrical_image.scatter_(2, x_mapped.unsqueeze(2).long(), y_mapped.unsqueeze(2).long(), 1)
-
-        return cylindrical_image
-    def extract_point_cloud_features(self, cylindrical_image):
-        # 使用FlowNet提取点云特征的逻辑
-        # cylindrical_image: 柱面图像，形状为 (batch_size, height, width)
-
-        # 假设你的特征提取逻辑是简单地将柱面图像展平为一维向量
-        features = cylindrical_image.view(cylindrical_image.shape[0], -1)
-
-        return features
-
     def init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
@@ -128,30 +102,79 @@ class FlowNet(nn.Module):
                 if m.bias is not None:
                     m.bias.data.zero_()
 
-    def forward(self, target_image, ref_img):
-
+    def forward(self, target_image, ref_img, point_cloud):
         s = target_image.size()
-
         input = torch.cat([target_image, ref_img], 1)
 
         out_conv1 = self.conv1(input)
-
         out_conv2 = self.conv2(out_conv1)
         out_conv3 = self.conv3_1(self.conv3(out_conv2))
         out_conv4 = self.conv4_1(self.conv4(out_conv3))
         out_conv5 = self.conv5_1(self.conv5(out_conv4))
         out_conv6 = self.conv6_1(self.conv6(out_conv5))
 
+        # 提取点云特征
+        point_cloud_features = self.conv_point_cloud(point_cloud)
+
+        # 融合图像特征和点云特征
+        fused_features = torch.cat([out_conv6, point_cloud_features], dim=1)
+
         features = out_conv6.view(1, s[0], -1)
-        
+
         # 将点云数据投影到柱面坐标中
+        height, width = self.calculate_height_width(point_cloud)  # 根据点云数据计算图像的高度和宽度
         cylindrical_image = self.project_to_cylindrical(point_cloud, height, width)
 
         # 使用FlowNet提取点云特征
         point_cloud_features = self.extract_point_cloud_features(cylindrical_image)
 
-        return features, point_cloud_features
+        return fused_features, point_cloud_features
 
+class PointCloud(nn.Module):
+    def __init__(self, num_points):
+        self.num_points = num_points
+
+    def project_to_cylindrical(self, point_cloud, height, width):
+        x = point_cloud[:, :, 0]  # 提取点云的 x 坐标
+        y = point_cloud[:, :, 1]  # 提取点云的 y 坐标
+        z = point_cloud[:, :, 2]  # 提取点云的 z 坐标
+        alpha = torch.atan2(y, x)  # 计算 alpha
+        beta = torch.asin(z / torch.sqrt(x**2 + y**2 + z**2))  # 计算 beta
+
+        # 将 alpha 和 beta 映射到柱面图像的坐标范围内
+        alpha_mapped = (alpha / (2 * math.pi) + 0.5) * width  # 映射到 [0, width] 范围内
+        beta_mapped = (beta + 0.5) * height  # 映射到 [0, height] 范围内
+
+        # 创建一个空的柱面图像张量
+        cylindrical_image = torch.zeros((point_cloud.shape[0], height, width))
+
+        # 将点云投影到柱面图像中
+        for i in range(point_cloud.shape[0]):
+            for j in range(point_cloud.shape[1]):
+                alpha_idx = int(alpha_mapped[i, j])
+                beta_idx = int(beta_mapped[i, j])
+                if alpha_idx >= 0 and alpha_idx < width and beta_idx >= 0 and beta_idx < height:
+                    if cylindrical_image[i, beta_idx, alpha_idx] == 0 or cylindrical_image[i, beta_idx, alpha_idx] > torch.sqrt(x[i, j]**2 + y[i, j]**2 + z[i, j]**2):
+                        cylindrical_image[i, beta_idx, alpha_idx] = torch.sqrt(x[i, j]**2 + y[i, j]**2 + z[i, j]**2)
+        return cylindrical_image
+
+    def calculate_height_width(self, point_cloud):
+        min_x = torch.min(point_cloud[:, :, 0])
+        max_x = torch.max(point_cloud[:, :, 0])
+        min_y = torch.min(point_cloud[:, :, 1])
+        max_y = torch.max(point_cloud[:, :, 1])
+
+        height = max_y - min_y
+        width = max_x - min_x
+
+        return height, width
+
+    def extract_point_cloud_features(self, cylindrical_image):
+        # 将柱面图像展开为一维向量
+        features = cylindrical_image.view(cylindrical_image.shape[0], -1)
+
+        return features
+ 
 class RecFeat(nn.Module):
     # LSTM
     def __init__(self, x_dim, h_dim, batch_size, n_layers):
@@ -183,8 +206,9 @@ class RecFeat(nn.Module):
             return (Variable(torch.zeros(self.n_layers, 1, self.h_dim)),
                     Variable(torch.zeros(self.n_layers, 1, self.h_dim)))
 
-    def forward(self, x):
-
+    def forward(self, x, point_cloud):
+        # 将点云数据与输入特征进行融合
+        x = torch.cat((x, point_cloud), dim=2)
         lstm_out, self.hidden = self.lstm(x, self.hidden)
         lstm_out = self.dropout(lstm_out)
         lstm_out = lstm_out.view(-1, self.h_dim)
@@ -355,24 +379,12 @@ class Soft_Mask(nn.Module):
         return feat_new
 
 class PoseRegressor(nn.Module):
-    # 姿态回归器模型，用于预测姿态（位移和旋转）
 
-    # 参数：
-    # - feature_dim: 输入特征的维度
-
-    # 成员变量：
-    # - feature_dim: 输入特征的维度
-    # - tr_pred: 位移预测网络
-    # - ro_pred: 旋转预测网络
-    # - dropout: Dropout层
-
-    # 方法：
-    # - init_weights: 初始化模型权重
-    # - forward: 前向传播计算姿态预测结果
     def __init__(self, feature_dim):
         super(PoseRegressor, self).__init__()
 
         self.feature_dim = feature_dim
+
         self.tr_pred = nn.Sequential(
             nn.Linear(self.feature_dim, 3)
         )
@@ -390,21 +402,17 @@ class PoseRegressor(nn.Module):
                 if m.bias is not None:
                     m.bias.data.zero_()
 
-    def forward(self, feat):
+    def forward(self, feat, point_cloud):
         # 前向传播计算姿态预测结果
-
-        # 参数：
-        # - feat: 输入特征
-
-        # 返回：
-        # - pose: 姿态预测结果
         feat = feat.view(-1, self.feature_dim)
+        point_cloud = point_cloud.view(-1, self.point_cloud_dim)
 
-        tr = self.tr_pred(feat)
-        ro = self.ro_pred(feat)
+        feat_with_pc = torch.cat((feat, point_cloud), dim=1)
+
+        tr = self.tr_pred(feat_with_pc)
+        ro = self.ro_pred(feat_with_pc)
 
         pose = torch.cat((tr, ro), 1)
-
         pose = pose.view(pose.size(0), 1, 6)
 
         return pose

@@ -6,7 +6,24 @@ from pathlib import Path
 import random
 import cv2
 import numpy as np
-import open3d as o3d
+import struct
+
+class Args:
+    def __init__(self):
+        self.data = 'E:\\SLAM\\Dataset\\KITTI_RAW_Synced'
+        self.sequence_length = 3
+        self.rotation_mode = 'euler'
+        self.workers = 4
+        self.epochs = 1
+        self.epoch_size = 0
+        self.batch_size = 8
+        self.lr = 1e-4
+        self.momentum = 0.9
+        self.beta = 0.999
+        self.weight_decay = 0
+        self.print_freq = 20
+        self.seed = 0
+        self.log_summary = 'progress_log_summary.csv'
 
 class KITTI_Loader(data.Dataset):
     """A sequence data loader where the files are arranged in this way:
@@ -18,11 +35,11 @@ class KITTI_Loader(data.Dataset):
         .
         transform functions must take in a list a images and a numpy array (usually intrinsics matrix)
     """
-    def __init__(self, root, seed=None, train=0, sequence_length=3, transform=None, data_degradation=0, data_random=True):
+    def __init__(self, root, seed=None, train=2, sequence_length=3, transform_imgs=None, transform_points=None, data_degradation=0, data_random=True):
         np.random.seed(seed)
         random.seed(seed)
         self.root = Path(root)
-
+        print("train parameter value:", train)
         if train == 0:
             scene_list_path = self.root / 'train.txt'
         if train == 1:
@@ -32,7 +49,8 @@ class KITTI_Loader(data.Dataset):
             
         print(scene_list_path)
         self.scenes = [self.root/folder[:-1] for folder in open(scene_list_path)]
-        self.transform = transform
+        self.transform_imgs = transform_imgs
+        self.transform_points = transform_points
         # degradation mode
         # 0: normal data 1: occlusion 2: blur 3: image missing 4: imu noise and bias 5: imu missing
         # 6: spatial misalignment 7: temporal misalignment 8: vision degradation 9: all degradation
@@ -53,92 +71,77 @@ class KITTI_Loader(data.Dataset):
         for scene in self.scenes:
 
             # load data from left camera
-            imgs_l = sorted(scene.glob('*.jpg'))  # 获取匹配模式的文件列表
-            # imgs_l = sorted(scene.files('*.jpg'))
+            imgs_l = sorted(scene.glob('*.png'))  # 获取匹配模式的文件列表
             imus_l = sorted(scene.glob('*.txt'))
-            # imus_l = sorted(scene.files('*.txt'))
             poses_l = np.genfromtxt(scene / 'poses.txt').astype(np.float64).reshape(-1, 3, 4)
-            
-            # Load point cloud data
-            point_clouds = sorted(scene.glob('*.txt'))
-            point_cloud_data = []
-            for pc_file in point_clouds:
-                with open(pc_file, 'r') as file:
-                    for line in file:
-                        values = line.strip().split(' ')
-                        point_cloud = [float(values[0]), float(values[1]), float(values[2]), float(values[3])]
-                        point_cloud_data.append(point_cloud)
+            point_clouds_1 = sorted(scene.glob('*.bin'))
 
             for i in range(demi_length, len(imgs_l) - demi_length):
-
                 sample = {'imgs': [], 'poses': [], 'imus': [], 'point_clouds': [], 'data_degradation': []}
-
+                flag = True  # 初始化标志变量为True
                 for j in shifts:
                     sample['imgs'].append(imgs_l[i + j])
                     sample['poses'].append(poses_l[i + j, :, :])
                     sample['imus'].append(np.genfromtxt(imus_l[i + j]).astype(np.float32).reshape(-1, 6))
-                    sample['point_clouds'].append(point_cloud_data[i])
+                    # 将point_cloud的定义移动到内部循环中
+                    with open(point_clouds_1[i + j], 'rb') as file:
+                        raw_data = file.read()
+                        num_points = len(raw_data) // 16
+                        point_cloud = struct.unpack('f' * (num_points * 4), raw_data)
+                        point_cloud = np.array(point_cloud).reshape(-1, 4)
+                        sample['point_clouds'].append(point_cloud)
 
                 sample['data_degradation'] = np.zeros(sequence_length).tolist()
 
-                # check lost images
-                flag = True
                 previous_img = -1
                 lost_n = 0
                 for n_img, img in enumerate(sample['imgs']):
                     current_img = int(str(img)[-14:-4])
-                    # current_img = np.int(img[-14:-4])
                     if previous_img != -1:
                         if current_img - previous_img != 1:
-                            flag = False
+                            flag = False  # 发现丢失的图像，将标志变量设置为False
                             lost_n = current_img - previous_img
-
                     previous_img = current_img
 
                 if flag:
-                    # if there is no lost data, append this sample
                     generate_degrade(sample, sequence_length, self.data_degradation)
                     degrade_imu_data(sample, sequence_length)
                     sequence_set.append(sample)
                 else:
-                    # if there is lost data, drop this sample
                     print(lost_n)
 
-        if self.random:
-            random.shuffle(sequence_set)
+            if self.random:
+                random.shuffle(sequence_set)
 
-        self.samples = sequence_set
+            self.samples = sequence_set
 
     def crawl_test_folders(self):
-
         sequence_set = []
 
         for scene in self.scenes:
-
-            # load data from left camera
-            imgs_l = sorted(scene.glob('*.jpg'))
+            # Load data from left camera
+            imgs_l = sorted(scene.glob('*.png'))
             imus_l = sorted(scene.glob('*.txt'))
             print("test")
             print(scene)
             poses_l = np.genfromtxt(scene / 'poses.txt').astype(np.float64).reshape(-1, 3, 4)
 
-            # Load point cloud data
-            point_clouds = sorted(scene.glob('*.txt'))
-            point_cloud_data = []
-            for pc_file in point_clouds:
-                with open(pc_file, 'r') as file:
-                    for line in file:
-                        values = line.strip().split(' ')
-                        point_cloud = [float(values[0]), float(values[1]), float(values[2]), float(values[3])]
-                        point_cloud_data.append(point_cloud)
-
             sample = {'imgs': [], 'poses': [], 'imus': [], 'point_clouds': [], 'data_degradation': []}
 
+            # Load point cloud data
+            point_clouds_1 = sorted(scene.glob('*.bin'))
+            for pc_file in point_clouds_1:
+                with open(pc_file, 'rb') as file:
+                    raw_data = file.read()
+                    num_points = len(raw_data) // 16  # Assuming each point is represented by 4 floats (16 bytes)
+                    point_cloud = struct.unpack('f' * (num_points * 4), raw_data)
+                    point_cloud = np.array(point_cloud).reshape(-1, 4)
+                    sample['point_clouds'].append(point_cloud)
+            # load imu、imgs、poses
             for i in range(len(imgs_l)):
                 sample['imgs'].append(imgs_l[i])
                 sample['poses'].append(poses_l[i, :, :])
                 sample['imus'].append(np.genfromtxt(imus_l[i]).astype(np.float32).reshape(-1, 6))
-                sample['point_clouds'].append(point_cloud_data[i])
 
             sample['data_degradation'] = np.zeros(len(imgs_l)).tolist()
 
@@ -156,11 +159,14 @@ class KITTI_Loader(data.Dataset):
         imgs = [load_as_float(img, data_degradation[n_img]) for n_img, img in enumerate(sample['imgs'])]
         poses = [pose for pose in sample['poses']]
         imus = [imu for imu in sample['imus']]
+        point_clouds = [point_cloud for point_cloud in sample['point_clouds']]
 
-        if self.transform is not None:
-            imgs = self.transform(imgs)
+        if self.transform_imgs is not None:
+            imgs = self.transform_imgs(imgs)
+        if self.transform_points is not None:
+            point_clouds = self.transform_points(point_clouds)
 
-        return imgs, imus, poses
+        return imgs, imus, poses, point_clouds
 
     def __len__(self):
         return len(self.samples)
@@ -314,11 +320,3 @@ def load_as_float(path, label):
         img = out
 
     return img
-
-# 在这个修改后的代码中，Image.open函数用于打开图像文件，并使用.convert('RGB')将图像转换为RGB模式。然后，使用.astype(np.float32)将图像转换为np.float32类型的数组。
-
-# 对于标签为1的情况，使用img.putpixel方法将指定区域的像素值设置为0。
-
-# 对于标签为3的情况，使用Image.fromarray方法创建一个全零的图像。
-
-# 对于标签为2的情况，使用img.filter方法应用滤波器，并使用img.putpixel方法在图像中添加椒盐噪声。最后，返回转换后的NumPy数组。
