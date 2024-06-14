@@ -284,8 +284,6 @@ def train(args, train_loader, feature_ext, feature_ext_pc, rec_feat, rec_imu, po
 
     for i, (imgs, imus, poses, pc_imgs) in enumerate(train_loader):
 
-        result_t = []
-
         if len(imgs[0]) != args.batch_size:
             continue
 
@@ -375,11 +373,6 @@ def train(args, train_loader, feature_ext, feature_ext_pc, rec_feat, rec_imu, po
 
             # compute pose err
             pose = pose.view(-1, 6)
-
-            if len(result_t) == 0:
-                result_t = np.copy(pose.cpu().detach().numpy())
-            else:
-                result_t = np.concatenate((result_t, pose.cpu().detach().numpy()), axis=0)
 
             trans_pose = compute_trans_pose(poses[j].cpu().data.numpy().astype(np.float64),
                                             poses[j + 1].cpu().data.numpy().astype(np.float64))
