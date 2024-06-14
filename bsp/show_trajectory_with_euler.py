@@ -1,52 +1,78 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R_
 
-# 读取位移数据
-gt = pd.read_csv(r'D:\SZU\SLAM\results\lvio\direct\truth_pose_seq7_0.csv', delimiter=",")
+gt_pose_file = 'D:\\SLAM\\results\\lvio\\hard-100\\truth_pose_seq10_10.csv'
+gt_pose_data = np.loadtxt(gt_pose_file, delimiter=',')
+gt_euler_file = 'D:\\SLAM\\results\\lvio\\hard-100\\truth_euler_seq10_10.csv'
+gt_euler_data = np.loadtxt(gt_euler_file, delimiter=',')
 
-gt_x = gt.iloc[:, 0].values
-gt_z = gt.iloc[:, 2].values
 
-# 计算累积位移
-cumulative_x = np.cumsum(gt_x)
-cumulative_z = np.cumsum(gt_z)
+# gt
+positions_gt = []
+current_position_gt = np.array([0.0, 0.0, 0.0])
+current_rotation_gt = np.eye(3)
+for i in range(len(gt_pose_data)):
+    translation = gt_pose_data[i, :]
+    euler_angles = gt_euler_data[i, :]
+    
+    rotation_matrix = R_.from_euler('xyz', euler_angles).as_matrix()
+    
+    current_position_gt += current_rotation_gt @ translation
+    current_rotation_gt = current_rotation_gt @ rotation_matrix
+    
+    positions_gt.append(current_position_gt.copy())
 
-# 创建旋转矩阵
-theta = np.radians(90)  # 转换为弧度
-c = np.cos(theta)
-s = np.sin(theta)
-R = np.array(((c, -s), (s, c)))
+positions_gt = np.array(positions_gt)
+
+# # LVIO
+# for i in range(10,19):  # 从0到88
+#     lvio_result_file = f'D:\\SLAM\\results\\lvio\\hard-100\\result_seq10_{i}.csv'
+#     lvio_result_data = np.loadtxt(lvio_result_file, delimiter=',')
+
+#     positions_lvio_result = []
+#     current_position_lvio_result = np.array([0.0, 0.0, 0.0])
+#     current_rotation_lvio_result = np.eye(3)
+#     for j in range(len(lvio_result_data)):
+#         translation = lvio_result_data[j, :3]
+#         euler_angles = lvio_result_data[j, 3:]
+
+#         rotation_matrix = R_.from_euler('xyz', euler_angles).as_matrix()
+
+#         current_position_lvio_result += current_rotation_lvio_result @ translation
+#         current_rotation_lvio_result = current_rotation_lvio_result @ rotation_matrix
+
+#         positions_lvio_result.append(current_position_lvio_result.copy())
+
+#     positions_lvio_result = np.array(positions_lvio_result)
+
+#     plt.plot(positions_lvio_result[:, 0], positions_lvio_result[:, 2], label=f'LVIO_{i}')
 
 # LVIO
-for i in range(10,19):  # 从0到88
-    lvio_result_file = f'D:\\SZU\\SLAM\\results\\lvio\\hard-100\\result_seq7_{i}.csv'
-    lvio_result_file = f'D:\\SZU\\SLAM\\results\\vo-100\\result_seq7_{i}.csv'
-    lvio_result_data = np.loadtxt(lvio_result_file, delimiter=',')
+lvio_result_file = f'D:\\SLAM\\results\\lvio\\hard-100\\result_seq10_16.csv'
+lvio_result_data = np.loadtxt(lvio_result_file, delimiter=',')
 
-    positions_lvio_result = []
-    current_position_lvio_result = np.array([0.0, 0.0, 0.0])
-    current_rotation_lvio_result = np.eye(3)
-    for j in range(len(lvio_result_data)):
-        translation = lvio_result_data[j, :3]
-        euler_angles = lvio_result_data[j, 3:]
+positions_lvio_result = []
+current_position_lvio_result = np.array([0.0, 0.0, 0.0])
+current_rotation_lvio_result = np.eye(3)
+for j in range(len(lvio_result_data)):
+    translation = lvio_result_data[j, :3]
+    euler_angles = lvio_result_data[j, 3:]
 
-        rotation_matrix = R_.from_euler('xyz', euler_angles).as_matrix()
+    rotation_matrix = R_.from_euler('xyz', euler_angles).as_matrix()
 
-        current_position_lvio_result += current_rotation_lvio_result @ translation
-        current_rotation_lvio_result = current_rotation_lvio_result @ rotation_matrix
+    current_position_lvio_result += current_rotation_lvio_result @ translation
+    current_rotation_lvio_result = current_rotation_lvio_result @ rotation_matrix
 
-        positions_lvio_result.append(current_position_lvio_result.copy())
+    positions_lvio_result.append(current_position_lvio_result.copy())
 
-    positions_lvio_result = np.array(positions_lvio_result)
+positions_lvio_result = np.array(positions_lvio_result)
+plt.plot(positions_lvio_result[:, 0], positions_lvio_result[:, 2], label=f'LVIO_16')
 
-    plt.plot(positions_lvio_result[:, 0], positions_lvio_result[:, 2], label=f'LVIO_{i}')
-
-plt.plot(cumulative_x, cumulative_z, color='red', label='Ground Truth')
+plt.plot(positions_gt[:, 0], positions_gt[:, 2], color='red', label='Ground Truth')
 plt.xlabel("X")
 plt.ylabel("Z")
-plt.title("Trajectory")
+plt.title("Trajectory_seq10")
 plt.grid(True)
 plt.legend()
 plt.show()
