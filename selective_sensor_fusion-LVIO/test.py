@@ -288,6 +288,8 @@ def compute_trans_pose(ref_pose, tgt_pose):
     tmp_pose = np.copy(tgt_pose)
     tmp_pose[:, :, -1] -= ref_pose[:, :, -1]
     trans_pose = np.linalg.inv(ref_pose[:, :, :3]) @ tmp_pose
+    print("trans_pose shape:", trans_pose.shape)
+    print("trans_pose ndim:", trans_pose.ndim)
     return trans_pose
 
 if __name__ == '__main__':

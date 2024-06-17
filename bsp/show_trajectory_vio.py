@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R_
 
 # 读取位移数据
-gt = pd.read_csv(r'D:\SLAM\results\lvio\direct-100\truth_pose_seq7_0.csv', delimiter=",")
+gt = pd.read_csv(r'D:\SLAM\results\vio\hard\truth_pose_seq7_0.csv', delimiter=",")
 
 gt_x = gt.iloc[:, 0].values
 gt_z = gt.iloc[:, 2].values
@@ -19,9 +19,9 @@ c = np.cos(theta)
 s = np.sin(theta)
 R = np.array(((c, -s), (s, c)))
 
-# LVIO
-for i in range(30,41):  # 从0到88
-    lvio_result_file = f'D:\\SLAM\\results\\lvio\\direct-100\\result_seq7_{i}.csv'
+# VIO
+for i in range(20,31):  # 从0到88
+    lvio_result_file = f'D:\\SLAM\\results\\vio\\hard\\result_seq7_{i}.csv'
     lvio = pd.read_csv(lvio_result_file, delimiter=",")
 
     lvio_x = lvio.iloc[:, 0].values
@@ -34,7 +34,7 @@ for i in range(30,41):  # 从0到88
     # 旋转
     rotated_result_lvio = np.dot(R, np.array([lvio_x, lvio_z]))
 
-    plt.plot(rotated_result_lvio[0], rotated_result_lvio[1], label=f'LVIO_{i}')
+    plt.plot(rotated_result_lvio[0], rotated_result_lvio[1], label=f'VIO_{i}')
 
 plt.plot(cumulative_x, cumulative_z, color='red', label='Ground Truth')
 plt.xlabel("X")

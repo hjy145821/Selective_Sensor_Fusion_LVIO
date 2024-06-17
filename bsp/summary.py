@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # 读取CSV文件，指定制表符为分隔符
-data = pd.read_csv("D:/SZU/SLAM/path/checkpoints/KITTI_RAW_Synced/progress_log_summary.csv", sep='\t')
+data = pd.read_csv("D:/SLAM/path/checkpoints/KITTI_RAW_Synced/progress_log_summary.csv", sep='\t')
 
 # 创建一个新的图形，包含3个子图
 fig, axs = plt.subplots(1, 3, figsize=(18, 6))

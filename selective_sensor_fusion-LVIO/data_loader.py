@@ -26,7 +26,7 @@ class KITTI_Loader(data.Dataset):
     def __init__(self, root, train=0, fusion_mode=0, sequence_length=3, transform=None):
         self.root = Path(root)
         if train == 0:
-            scene_list_path = self.root/'train_test.txt'
+            scene_list_path = self.root/'train.txt'
         if train == 1:
             scene_list_path = self.root/'val.txt'
         if train == 2:

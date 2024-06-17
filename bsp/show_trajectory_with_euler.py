@@ -67,6 +67,7 @@ for j in range(len(lvio_result_data)):
     positions_lvio_result.append(current_position_lvio_result.copy())
 
 positions_lvio_result = np.array(positions_lvio_result)
+
 plt.plot(positions_lvio_result[:, 0], positions_lvio_result[:, 2], label=f'LVIO_16')
 
 plt.plot(positions_gt[:, 0], positions_gt[:, 2], color='red', label='Ground Truth')
